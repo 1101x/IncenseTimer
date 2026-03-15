@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>향로 타이머</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    background: #0a0a0f;
+    overflow: hidden; overscroll-behavior: none;
+    height: 100%; width: 100%; position: fixed; touch-action: none;
+    display: flex; justify-content: center; align-items: center;
+    font-family: 'Noto Serif KR', serif;
+  }
+
+  @keyframes smokeRise {
+    0%   { transform: translate(0,0) scale(1); opacity:.8; }
+    50%  { transform: translate(calc(var(--drift)*.5),-60px) scale(2.5); opacity:.5; }
+    100% { transform: translate(var(--drift),-140px) scale(4); opacity:0; }
+  }
+  @keyframes glowPulse {
+    0%,100% { filter: drop-shadow(0 0 8px rgba(200,160,60,.5)); }
+    50%     { filter: drop-shadow(0 0 18px rgba(220,180,80,.85)); }
+  }
+  @keyframes emberGlow {
+    0%,100% { box-shadow: 0 0 6px 2px rgba(220,60,40,.8), 0 0 12px 4px rgba(255,120,60,.4); }
+    50%     { box-shadow: 0 0 10px 4px rgba(255,100,30,1), 0 0 20px 8px rgba(255,60,20,.6); }
+  }
+  @keyframes floatUp {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-6px); }
+  }
+
+  .app-wrapper {
+    width: 390px; min-height: 844px;
+    background: radial-gradient(ellipse at 50% 30%, #1a1428 0%, #0d0d15 50%, #060608 100%);
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 40px;
+    box-shadow: 0 0 80px rgba(0,0,0,.9); margin: auto;
+  }
+  .bg-circle { position: absolute; border-radius: 50%; pointer-events: none; }
+
+  .scene {
+    position: relative; width: 220px; height: 420px;
+    display: flex; flex-direction: column; align-items: center;
+    animation: floatUp 4s ease-in-out infinite;
+    touch-action: none; user-select: none;
+  }
+  .smoke-area {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 60px; height: 180px; pointer-events: none; overflow: visible;
+  }
+  .smoke-dot {
+    position: absolute; left: 26px; top: 0;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(220,80,80,.7), rgba(180,40,40,0));
+    animation: smokeRise var(--dur) ease-out var(--delay) forwards;
+    pointer-events: none;
+  }
+  .incense-stick-wrap {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+    user-select: none; z-index: 2;
+  }
+  .ember {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle, #ff6a2a, #cc2200);
+    animation: emberGlow 1s ease-in-out infinite;
+    margin-bottom: -1px; flex-shrink: 0;
+  }
+  .ember.off { background: #2a1a1a; box-shadow: none; animation: none; }
+  .stick {
+    width: 7px; border-radius: 3px 3px 0 0;
+    background: linear-gradient(to bottom, #2d7a3a, #1f5a28);
+    box-shadow: 0 0 4px rgba(60,180,80,.3);
+    transition: height .95s linear;
+  }
+  .stick-base { width: 7px; height: 6px; background: #5a3a1a; border-radius: 0 0 2px 2px; }
+
+  .burner-svg { animation: glowPulse 3s ease-in-out infinite; margin-top: -8px; }
+
+  .time-display {
+    font-family: 'Cinzel', serif; font-size: 42px; font-weight: 400;
+    color: rgba(255,255,255,.92); letter-spacing: 4px;
+    margin-top: 48px; text-shadow: 0 0 30px rgba(180,140,60,.4);
+  }
+  .time-label {
+    font-family: 'Noto Serif KR', serif; font-size: 11px;
+    color: rgba(180,150,80,.5); letter-spacing: 3px;
+    margin-top: 6px; text-transform: uppercase; min-height: 1.4em; text-align: center;
+  }
+  .controls { display: flex; gap: 16px; margin-top: 36px; margin-bottom: 60px; }
+  .btn {
+    font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 3px;
+    width: 120px; padding: 12px 0; text-align: center;
+    border: 1px solid rgba(180,150,60,.4); background: transparent;
+    color: rgba(220,190,100,.85); border-radius: 2px;
+    cursor: pointer; transition: all .25s; text-transform: uppercase;
+  }
+  .btn:hover { background: rgba(180,150,60,.12); border-color: rgba(220,190,100,.7); color: rgba(255,220,120,1); }
+  .btn.primary {
+    background: linear-gradient(135deg, rgba(180,140,50,.25), rgba(140,100,30,.15));
+    border-color: rgba(200,170,70,.6);
+  }
+  .btn.primary:hover { background: linear-gradient(135deg, rgba(200,160,60,.4), rgba(160,120,40,.25)); }
+</style>
+</head>
+<body>
+
+<div class="app-wrapper">
+  <div class="bg-circle" style="width:300px;height:300px;top:-80px;left:-60px;background:radial-gradient(circle,rgba(100,80,30,0.08),transparent 70%)"></div>
+  <div class="bg-circle" style="width:200px;height:200px;bottom:100px;right:-40px;background:radial-gradient(circle,rgba(40,60,100,0.06),transparent 70%)"></div>
+
+  <div class="scene" id="scene">
+    <div class="smoke-area" id="smokeArea" style="display:none"></div>
+
+    <div class="incense-stick-wrap" id="stickWrap" style="bottom:155px">
+      <div class="ember off" id="ember"></div>
+      <div class="stick" id="stick" style="height:120px"></div>
+      <div class="stick-base"></div>
+    </div>
+
+    <div style="position:absolute;bottom:0">
+      <svg class="burner-svg" width="200" height="180" viewBox="0 0 200 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="celadonBody" cx="50%" cy="40%" r="60%">
+            <stop offset="0%"   stop-color="#8fbcaa"/>
+            <stop offset="50%"  stop-color="#6a9e8c"/>
+            <stop offset="100%" stop-color="#3d6b5a"/>
+          </radialGradient>
+          <radialGradient id="celadonTop" cx="50%" cy="30%" r="60%">
+            <stop offset="0%"   stop-color="#9ecfba"/>
+            <stop offset="100%" stop-color="#4d8070"/>
+          </radialGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <ellipse cx="100" cy="165" rx="72" ry="10" fill="#2a1f0e" opacity="0.5"/>
+        <rect x="34" y="145" width="132" height="18" rx="4" fill="url(#celadonBody)"/>
+        <ellipse cx="100" cy="145" rx="66" ry="8"  fill="#7aaa96"/>
+        <ellipse cx="52"  cy="162" rx="10" ry="7"  fill="url(#celadonBody)"/>
+        <ellipse cx="148" cy="162" rx="10" ry="7"  fill="url(#celadonBody)"/>
+        <circle  cx="49"  cy="158" r="2" fill="#2d5448"/>
+        <circle  cx="151" cy="158" r="2" fill="#2d5448"/>
+        <ellipse cx="100" cy="108" rx="46" ry="14" fill="#7aaa96"/>
+        <path d="M54 108 Q58 135 100 140 Q142 135 146 108 Z" fill="url(#celadonBody)"/>
+        <ellipse cx="100" cy="108" rx="46" ry="14" fill="url(#celadonTop)" opacity="0.7"/>
+        <circle  cx="100" cy="72"  r="34" fill="none" stroke="url(#celadonBody)" stroke-width="3.5"/>
+        <circle  cx="100" cy="72"  r="34" fill="none" stroke="#6a9e8c" stroke-width="1" opacity="0.5"/>
+        <ellipse cx="90"  cy="58"  rx="10" ry="7" fill="rgba(200,240,220,0.15)"/>
+        <ellipse cx="100" cy="108" rx="47" ry="14" fill="none" stroke="#c4933a" stroke-width="1.5" opacity="0.6"/>
+        <rect x="33" y="143" width="134" height="3" rx="1" fill="#c4933a" opacity="0.4"/>
+        <circle cx="100" cy="38" r="4" fill="#1a2820"/>
+        <circle cx="100" cy="38" r="4" fill="none" stroke="#8fbcaa" stroke-width="1.5"/>
+        <!-- 연꽃잎 (JS로 생성) -->
+        <g id="lotusGroup"></g>
+        <!-- 격자 구멍 (JS로 생성) -->
+        <g id="latticeGroup"></g>
+      </svg>
+    </div>
+  </div>
+
+  <div class="time-display" id="timeDisplay">60:00</div>
+  <div class="time-label"   id="timeLabel">향 길이로 시간을 설정하세요</div>
+  <div class="controls"     id="controls"></div>
+</div>
+
+<script>
+// ── SVG 동적 요소 생성 ───────────────────────────────────────
+(function buildSVG() {
+  const ns = "http://www.w3.org/2000/svg";
+  // 연꽃잎
+  const lotus = document.getElementById('lotusGroup');
+  for (let i = 0; i < 10; i++) {
+    const a   = (i / 10) * Math.PI * 2;
+    const cx2 = 100 + 52 * Math.cos(a);
+    const cy2 = 120 + 18 * Math.sin(a) * 0.5;
+    const el  = document.createElementNS(ns, 'ellipse');
+    el.setAttribute('cx', cx2); el.setAttribute('cy', cy2);
+    el.setAttribute('rx', 14);  el.setAttribute('ry', 22);
+    el.setAttribute('fill', 'url(#celadonBody)');
+    el.setAttribute('transform', `rotate(${(i/10)*360},${cx2},${cy2})`);
+    el.setAttribute('opacity', '0.9');
+    lotus.appendChild(el);
+  }
+  // 격자 구멍
+  const lattice = document.getElementById('latticeGroup');
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 6; col++) {
+      const phi   = (row + 0.5) / 4 * Math.PI;
+      const theta = (col / 6) * Math.PI * 2;
+      const x = 100 + 28 * Math.sin(phi) * Math.cos(theta);
+      const y =  72 - 28 * Math.cos(phi) + 28 * Math.sin(phi) * Math.sin(theta) * 0.25;
+      const el = document.createElementNS(ns, 'ellipse');
+      el.setAttribute('cx', x); el.setAttribute('cy', y);
+      el.setAttribute('rx', 5); el.setAttribute('ry', 4);
+      el.setAttribute('fill', '#1a2820'); el.setAttribute('opacity', '0.7');
+      lattice.appendChild(el);
+    }
+  }
+})();
+
+// ── 상태 ────────────────────────────────────────────────────
+const MAX_SECONDS     = 3600;
+const STICK_MAX_HEIGHT = 120;
+const SEC_PER_PX      = MAX_SECONDS / STICK_MAX_HEIGHT;
+
+let totalSeconds = 3600, remaining = 3600;
+let running = false, finished = false, dragging = false;
+let countInterval = null, smokeInterval = null, particleId = 0;
+let totalSecRef = 3600, lastY = null;
+
+// ── DOM 참조 ─────────────────────────────────────────────────
+const scene      = document.getElementById('scene');
+const stick      = document.getElementById('stick');
+const ember      = document.getElementById('ember');
+const smokeArea  = document.getElementById('smokeArea');
+const timeDisp   = document.getElementById('timeDisplay');
+const timeLabel  = document.getElementById('timeLabel');
+const controls   = document.getElementById('controls');
+
+// ── 유틸 ────────────────────────────────────────────────────
+const pad = n => String(n).padStart(2, '0');
+const fmt = s => `${pad(Math.floor(s/60))}:${pad(s%60)}`;
+
+// ── 향 높이 업데이트 ─────────────────────────────────────────
+function updateStick() {
+  const base = running || finished ? remaining : totalSeconds;
+  const h    = Math.max(2, (base / MAX_SECONDS) * STICK_MAX_HEIGHT);
+  stick.style.height = h + 'px';
+  smokeArea.style.top = (420 - 155 - h - 19) + 'px';
+}
+
+// ── 연기 ────────────────────────────────────────────────────
+function addSmoke() {
+  [...smokeArea.children].forEach(c => {
+    if (Date.now() - Number(c.dataset.born) > 4500) c.remove();
+  });
+  const dot = document.createElement('div');
+  dot.className    = 'smoke-dot';
+  dot.dataset.born = Date.now();
+  dot.style.setProperty('--dur',   `${(2.5 + Math.random()*2).toFixed(2)}s`);
+  dot.style.setProperty('--delay', `${(Math.random()*1.5).toFixed(2)}s`);
+  dot.style.setProperty('--drift', `${((Math.random()-.5)*40).toFixed(1)}px`);
+  smokeArea.appendChild(dot);
+}
+
+// ── 알람 ────────────────────────────────────────────────────
+function triggerAlarm() {
+  try {
+    navigator.vibrate?.([300,100,300,100,500]);
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880,0,.5],[1100,.5,.5],[880,1,.5],[1320,1.5,1]].forEach(([f,s,d]) => {
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination); o.type='sine';
+      o.frequency.setValueAtTime(f, ctx.currentTime+s);
+      g.gain.setValueAtTime(.4, ctx.currentTime+s);
+      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime+s+d);
+      o.start(ctx.currentTime+s); o.stop(ctx.currentTime+s+d);
+    });
+  } catch(_){}
+}
+
+// ── UI 업데이트 ──────────────────────────────────────────────
+function updateUI() {
+  timeDisp.textContent  = fmt(remaining);
+  timeLabel.textContent = finished ? '시간이 완료되었습니다'
+                        : running  ? '향이 타고 있습니다'
+                        :            '향 길이로 시간을 설정하세요';
+  // 커서
+  scene.style.cursor = (!running && !finished) ? 'ns-resize' : 'default';
+  // 불씨
+  ember.className = running ? 'ember' : 'ember off';
+  // 연기
+  if (running) {
+    smokeArea.style.display = 'block';
+    smokeInterval = setInterval(addSmoke, 220);
+  } else {
+    clearInterval(smokeInterval);
+    smokeArea.style.display = 'none';
+    smokeArea.innerHTML = '';
+  }
+  updateStick();
+  renderControls();
+}
+
+// ── 버튼 렌더 ────────────────────────────────────────────────
+function renderControls() {
+  controls.innerHTML = '';
+  const mk = (text, cls, fn) => {
+    const b = document.createElement('button');
+    b.className   = cls;
+    b.textContent = text;
+    b.onclick     = fn;
+    controls.appendChild(b);
+  };
+  if (!running && !finished)
+    mk(remaining === totalSeconds ? '시작' : '다시시작', 'btn primary', handleStart);
+  if (running)
+    mk('일시정지', 'btn', handlePause);
+  if (running || remaining < totalSeconds || finished)
+    mk('초기화', 'btn', handleReset);
+}
+
+// ── 타이머 핸들러 ─────────────────────────────────────────────
+function handleStart() {
+  if (finished) { finished = false; remaining = totalSeconds; }
+  running = true; updateUI();
+  countInterval = setInterval(() => {
+    remaining--;
+    timeDisp.textContent = fmt(remaining);
+    updateStick();
+    if (remaining <= 0) {
+      clearInterval(countInterval);
+      running = false; finished = true;
+      triggerAlarm(); updateUI();
+    }
+  }, 1000);
+}
+function handlePause() { running = false; clearInterval(countInterval); updateUI(); }
+function handleReset() {
+  running = false; finished = false;
+  clearInterval(countInterval);
+  totalSecRef = totalSeconds; remaining = totalSeconds;
+  updateUI();
+}
+
+// ── 드래그 ──────────────────────────────────────────────────
+scene.addEventListener('pointerdown', e => {
+  if (running || finished) return;
+  e.preventDefault();
+  lastY = e.clientY; dragging = true;
+});
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  e.preventDefault();
+  const dy   = lastY - e.clientY;
+  lastY      = e.clientY;
+  const next = Math.min(MAX_SECONDS, Math.max(60, Math.round(totalSecRef + dy * SEC_PER_PX)));
+  totalSecRef  = next;
+  totalSeconds = next;
+  remaining    = next;
+  timeDisp.textContent = fmt(remaining);
+  updateStick();
+  renderControls();
+}, { passive: false });
+window.addEventListener('pointerup', () => { dragging = false; });
+
+// ── 초기 렌더 ────────────────────────────────────────────────
+updateUI();
+</script>
+</body>
+</html>
